@@ -1,0 +1,8 @@
+{
+  "diagramType": "mermaid",
+  "source": "flowchart TD\n  A[Render] --> B[Compare]\n  B --> C[Snapshot]\n",
+  "targets": [
+    { "version": "9.4.3", "options": {} },
+    { "version": "10.6.0", "options": {} }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "diagramType": "plantuml",
+  "source": "@startuml\nAlice -> Bob : hello\nBob --> Alice : ok\n@enduml",
+  "targets": [
+    { "version": "1.2023.10", "options": { "format": "svg" } },
+    { "version": "1.2022.7", "options": { "format": "svg" } }
+  ]
+}
