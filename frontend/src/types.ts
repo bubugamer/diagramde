@@ -16,6 +16,8 @@ export interface RenderResult {
   error?: RenderError
 }
 
+export type LlmIntent = 'generate' | 'refine' | 'convert'
+
 export interface SnapshotTarget {
   version: string
   options?: Record<string, unknown>
@@ -25,6 +27,12 @@ export interface Snapshot {
   diagramType: DiagramType
   source: string
   targets: SnapshotTarget[]
+  llm?: {
+    prompt: string
+    intent: LlmIntent
+    generatedText?: string
+    versions?: string[]
+  }
 }
 
 export interface PlantUmlRenderRequest {
@@ -36,4 +44,18 @@ export interface PlantUmlRenderRequest {
 export interface PlantUmlRenderResponse {
   svg: string | null
   error: RenderError | null
+}
+
+export interface LlmRequest {
+  prompt: string
+  intent: LlmIntent
+  diagramType: DiagramType
+  versions: string[]
+  existingText?: string
+}
+
+export interface LlmResponse {
+  generatedText: string
+  reasoning?: string
+  warnings?: string
 }

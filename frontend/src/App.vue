@@ -3,7 +3,7 @@
     <header class="topbar">
       <div>
         <h1>Diagram Debugger</h1>
-        <p class="subtitle">Version-aware renderer for Mermaid and PlantUML</p>
+        <p class="subtitle">LLM-assisted, version-aware Mermaid and PlantUML</p>
       </div>
       <div class="actions">
         <button @click="toggleMode">Mode: {{ modeLabel }}</button>
@@ -15,41 +15,99 @@
       </div>
     </header>
 
-    <section class="controls">
-      <div class="field">
-        <label>Diagram Type</label>
-        <select v-model="diagramType">
-          <option value="mermaid">Mermaid</option>
-          <option value="plantuml">PlantUML</option>
-        </select>
-      </div>
+    <section class="panel">
+      <div class="section-title">LLM Panel</div>
+      <div class="grid">
+        <div class="stack">
+          <div class="row">
+            <div>
+              <label>Intent</label><br />
+              <select v-model="llmIntent">
+                <option value="generate">Generate</option>
+                <option value="refine">Refine</option>
+                <option value="convert">Convert</option>
+              </select>
+            </div>
+            <div>
+              <label>Diagram Type</label><br />
+              <select v-model="diagramType">
+                <option value="mermaid">Mermaid</option>
+                <option value="plantuml">PlantUML</option>
+              </select>
+            </div>
+            <div>
+              <label>Version A</label><br />
+              <select v-model="leftVersion">
+                <option v-for="v in currentVersions" :key="v" :value="v">{{ v }}</option>
+              </select>
+            </div>
+            <div v-if="mode === 'compare'">
+              <label>Version B</label><br />
+              <select v-model="rightVersion">
+                <option v-for="v in currentVersions" :key="v" :value="v">{{ v }}</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label>Prompt</label>
+            <textarea v-model="llmPrompt" placeholder="Describe the diagram or ask for fixes..."></textarea>
+          </div>
+          <div>
+            <div class="row space-between">
+              <label>Existing Text (Refine/Convert) — defaults to editor</label>
+              <div class="row" style="gap: 4px;">
+                <input type="checkbox" id="use-editor" v-model="useEditorText" />
+                <label for="use-editor">Use editor text</label>
+              </div>
+            </div>
+            <textarea v-model="llmExistingText" placeholder="@startuml ..."></textarea>
+          </div>
+          <div class="llm-footer">
+            <div class="llm-actions">
+              <button class="primary" :disabled="llmStatus === 'loading'" @click="askLlm">Ask LLM</button>
+              <span
+                class="chip"
+                :class="{
+                  pending: llmStatus === 'loading',
+                  success: llmStatus === 'success',
+                  error: llmStatus === 'error',
+                }"
+              >
+                LLM: {{ llmStatusMessage }}
+              </span>
+            </div>
+            <div class="row" style="gap: 6px;">
+              <label>History</label>
+              <span class="chip">last 5</span>
+            </div>
+          </div>
+        </div>
 
-      <div class="field">
-        <label>Version A</label>
-        <select v-model="leftVersion">
-          <option v-for="v in currentVersions" :key="v" :value="v">{{ v }}</option>
-        </select>
-      </div>
-
-      <div class="field" v-if="mode === 'compare'">
-        <label>Version B</label>
-        <select v-model="rightVersion">
-          <option v-for="v in currentVersions" :key="v" :value="v">{{ v }}</option>
-        </select>
-      </div>
-
-      <div class="field grow">
-        <label>Render Options</label>
-        <div class="buttons">
-          <button @click="renderLeft" :disabled="rendering">Render A</button>
-          <button v-if="mode === 'compare'" @click="renderRight" :disabled="rendering">Render B</button>
+        <div class="stack">
+          <div class="history">
+            <div v-for="(item, idx) in history" :key="idx" class="history-item">
+              <span>{{ item.intent }}: {{ item.prompt }}</span>
+              <button @click="applyHistory(item)">Apply</button>
+            </div>
+          </div>
+          <div>
+            <label>LLM Output (preview)</label>
+            <textarea v-model="llmOutput" placeholder="```mermaid\nflowchart TD\n...\n```"></textarea>
+            <div class="llm-actions" style="margin-top: 8px;">
+              <button class="primary" :disabled="!llmOutput" @click="applyLlmOutput">Apply to Editor</button>
+            </div>
+          </div>
         </div>
       </div>
     </section>
 
-    <section class="editor">
-      <label>Source</label>
-      <textarea v-model="source" rows="10" spellcheck="false"></textarea>
+    <section class="panel stack">
+      <div class="section-title">Editor</div>
+      <textarea class="editor-area" v-model="source" rows="10" spellcheck="false"></textarea>
+      <div class="row" style="gap: 10px;">
+        <button class="primary" @click="renderLeft" :disabled="rendering">Render A</button>
+        <button v-if="mode === 'compare'" @click="renderRight" :disabled="rendering">Render B</button>
+      </div>
     </section>
 
     <section class="panels" :class="{ compare: mode === 'compare' }">
@@ -84,7 +142,8 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { renderMermaid } from './utils/mermaidLoader'
 import { renderPlantUml } from './utils/api'
-import type { DiagramType, RenderResult, Snapshot } from './types'
+import { callLlm } from './utils/llm'
+import type { DiagramType, LlmIntent, RenderResult, Snapshot } from './types'
 
 const MERMAID_VERSIONS = ['10.6.0', '9.4.3', '8.4.8']
 const PLANTUML_VERSIONS = ['1.2023.10', '1.2022.7']
@@ -110,12 +169,27 @@ const right = reactive<RenderResult>({ status: 'idle' })
 
 const source = ref(DEFAULT_SOURCE.mermaid)
 
+const llmIntent = ref<LlmIntent>('generate')
+const llmPrompt = ref('')
+const llmExistingText = ref('')
+const useEditorText = ref(true)
+const llmStatus = ref<'idle' | 'loading' | 'error' | 'success'>('idle')
+const llmError = ref<string | null>(null)
+const llmOutput = ref('')
+const history = ref<{ prompt: string; intent: LlmIntent; output: string }[]>([])
+
 const currentVersions = computed(() =>
   diagramType.value === 'mermaid' ? MERMAID_VERSIONS : PLANTUML_VERSIONS,
 )
 
 const diagramTypeLabel = computed(() => (diagramType.value === 'mermaid' ? 'Mermaid' : 'PlantUML'))
 const modeLabel = computed(() => (mode.value === 'single' ? 'Single' : 'Compare'))
+const llmStatusMessage = computed(() => {
+  if (llmStatus.value === 'loading') return 'generating...'
+  if (llmStatus.value === 'error') return llmError.value || 'error'
+  if (llmStatus.value === 'success') return 'done'
+  return 'idle'
+})
 
 function formatError(err?: { type: string; message: string; raw: string }) {
   if (!err) return ''
@@ -125,16 +199,6 @@ function formatError(err?: { type: string; message: string; raw: string }) {
 function toggleMode() {
   mode.value = mode.value === 'single' ? 'compare' : 'single'
 }
-
-watch(
-  () => diagramType.value,
-  (next) => {
-    source.value = DEFAULT_SOURCE[next]
-    const versions = next === 'mermaid' ? MERMAID_VERSIONS : PLANTUML_VERSIONS
-    leftVersion.value = versions[0]
-    rightVersion.value = versions[1] ?? versions[0]
-  },
-)
 
 async function renderLeft() {
   await renderTarget(left, leftVersion.value, 'left')
@@ -152,7 +216,7 @@ async function renderTarget(target: RenderResult, version: string, key: 'left' |
   try {
     if (diagramType.value === 'mermaid') {
       const safeVersion = version.replace(/[^a-zA-Z0-9_-]/g, '-')
-      const renderId = `${key}-${safeVersion}-${Date.now()}` // avoid dots breaking querySelector
+      const renderId = `${key}-${safeVersion}-${Date.now()}`
       const svg = await renderMermaid(renderId, source.value, version)
       target.status = 'success'
       target.svg = svg
@@ -179,6 +243,40 @@ async function renderTarget(target: RenderResult, version: string, key: 'left' |
   }
 }
 
+async function askLlm() {
+  llmStatus.value = 'loading'
+  llmError.value = null
+  const versions = mode.value === 'compare' ? [leftVersion.value, rightVersion.value] : [leftVersion.value]
+  const existing = useEditorText.value ? source.value : llmExistingText.value
+  try {
+    const resp = await callLlm({
+      prompt: llmPrompt.value,
+      intent: llmIntent.value,
+      diagramType: diagramType.value,
+      versions,
+      existingText: existing,
+    })
+    llmOutput.value = resp.generatedText
+    history.value = [{ prompt: llmPrompt.value, intent: llmIntent.value, output: resp.generatedText }, ...history.value].slice(0, 5)
+    llmStatus.value = 'success'
+  } catch (err) {
+    llmStatus.value = 'error'
+    llmError.value = err instanceof Error ? err.message : String(err)
+  }
+}
+
+function applyLlmOutput() {
+  if (!llmOutput.value) return
+  source.value = llmOutput.value
+}
+
+function applyHistory(item: { prompt: string; intent: LlmIntent; output: string }) {
+  llmPrompt.value = item.prompt
+  llmIntent.value = item.intent
+  llmOutput.value = item.output
+  source.value = item.output
+}
+
 function exportSnapshot() {
   const snapshot: Snapshot = {
     diagramType: diagramType.value,
@@ -190,6 +288,12 @@ function exportSnapshot() {
             { version: rightVersion.value, options: {} },
           ]
         : [{ version: leftVersion.value, options: {} }],
+    llm: {
+      prompt: llmPrompt.value,
+      intent: llmIntent.value,
+      generatedText: llmOutput.value,
+      versions: mode.value === 'compare' ? [leftVersion.value, rightVersion.value] : [leftVersion.value],
+    },
   }
 
   const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' })
@@ -226,14 +330,29 @@ function applySnapshot(snapshot: Snapshot) {
     rightVersion.value = snapshot.targets[1].version
     mode.value = 'compare'
   }
+  if (snapshot.llm) {
+    llmPrompt.value = snapshot.llm.prompt
+    llmIntent.value = snapshot.llm.intent
+    llmOutput.value = snapshot.llm.generatedText || ''
+  }
 }
+
+watch(
+  () => diagramType.value,
+  (next) => {
+    source.value = DEFAULT_SOURCE[next]
+    const versions = next === 'mermaid' ? MERMAID_VERSIONS : PLANTUML_VERSIONS
+    leftVersion.value = versions[0]
+    rightVersion.value = versions[1] ?? versions[0]
+  },
+)
 </script>
 
 <style scoped>
 .page {
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  color: #1f2933;
-  background: linear-gradient(135deg, #f5f7fb, #eef2ff);
+  color: #e5e7eb;
+  background: radial-gradient(120% 120% at 20% 20%, #1e293b, #0b1221);
   min-height: 100vh;
   padding: 24px;
 }
@@ -247,11 +366,13 @@ a {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .subtitle {
   margin: 4px 0 0;
-  color: #52606d;
+  color: #9ca3af;
 }
 
 .actions {
@@ -262,66 +383,143 @@ a {
 
 .actions button,
 .import {
-  background: #1f7aec;
-  color: white;
+  background: linear-gradient(90deg, #22d3ee, #3b82f6);
+  color: #0b1221;
   border: none;
   border-radius: 6px;
   padding: 8px 12px;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .import input {
   display: none;
 }
 
-.controls {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-  background: white;
-  border: 1px solid #dfe3eb;
-  border-radius: 10px;
-  padding: 12px;
+.panel {
+  background: #111827;
+  border: 1px solid #1f2937;
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.25);
   margin-bottom: 12px;
-  box-shadow: 0 8px 30px rgba(31, 122, 236, 0.05);
 }
 
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.field label {
+.section-title {
+  color: #9ca3af;
   font-size: 13px;
-  color: #52606d;
+  letter-spacing: 0.4px;
+  margin-bottom: 8px;
+  text-transform: uppercase;
 }
 
-.field select,
-.field textarea,
-.field input,
-.field button {
+.grid {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr;
+  gap: 12px;
+}
+
+.stack {
+  display: grid;
+  gap: 12px;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.row.space-between {
+  justify-content: space-between;
+}
+
+label {
+  font-size: 12px;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+select,
+textarea,
+input,
+button {
+  background: #1f2937;
+  color: #e5e7eb;
+  border: 1px solid #1f2937;
+  border-radius: 10px;
+  padding: 10px;
   font-size: 14px;
 }
 
-.grow {
-  flex: 1;
+button {
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
 }
 
-.buttons {
+button.primary {
+  background: linear-gradient(90deg, #22d3ee, #3b82f6);
+  color: #0b1221;
+  font-weight: 700;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+textarea {
+  width: 100%;
+  min-height: 90px;
+  resize: vertical;
+}
+
+.editor-area {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #1f2937;
+  padding: 12px;
+  font-family: 'SFMono-Regular', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  background: #0f172a;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.llm-footer {
   display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.llm-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.history {
+  display: grid;
   gap: 8px;
 }
 
-.editor textarea {
-  width: 100%;
+.history-item {
+  background: #1f2937;
+  border: 1px solid #1f2937;
   border-radius: 10px;
-  border: 1px solid #dfe3eb;
-  padding: 12px;
-  font-family: 'SFMono-Regular', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-  background: #ffffff;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+  padding: 10px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.history-item span {
+  color: #9ca3af;
+  font-size: 13px;
 }
 
 .panels {
@@ -335,20 +533,10 @@ a {
   grid-template-columns: 1fr 1fr;
 }
 
-.panel {
-  background: white;
-  border: 1px solid #dfe3eb;
+.render {
+  background: #0f172a;
   border-radius: 10px;
-  padding: 12px;
-  min-height: 240px;
-  box-shadow: 0 8px 30px rgba(31, 122, 236, 0.05);
-}
-
-.panel header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
+  padding: 8px;
 }
 
 .render svg {
@@ -356,35 +544,41 @@ a {
 }
 
 .placeholder {
-  color: #8695a6;
+  color: #9ca3af;
   font-style: italic;
 }
 
 .chip {
-  padding: 4px 8px;
+  padding: 6px 10px;
   border-radius: 999px;
-  background: #f3f4f6;
-  color: #52606d;
+  background: #1f2937;
+  border: 1px solid #1f2937;
+  color: #9ca3af;
   font-size: 12px;
 }
 
 .chip.success {
-  background: #e8f9f0;
-  color: #1f7a4d;
+  background: #16a34a;
+  color: #0b1221;
 }
 
 .chip.error {
-  background: #ffe8e6;
-  color: #c23030;
+  background: #ef4444;
+  color: #0b1221;
+}
+
+.chip.pending {
+  background: #f59e0b;
+  color: #0b1221;
 }
 
 .error-box {
-  background: #fff5f5;
-  color: #b42318;
+  background: #7f1d1d;
+  color: #fecdd3;
   border-radius: 8px;
   padding: 8px;
   white-space: pre-wrap;
-  border: 1px solid #ffd3cf;
+  border: 1px solid #b91c1c;
   font-family: 'SFMono-Regular', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
 }
 </style>

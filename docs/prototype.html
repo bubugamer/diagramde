@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Diagram Debugger Prototype</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --card: #1f2937;
+      --accent: #22d3ee;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --border: #1f2937;
+      --chip-ok: #16a34a;
+      --chip-err: #ef4444;
+      --chip-pending: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+      background: radial-gradient(120% 120% at 20% 20%, #1e293b, #0b1221);
+      color: var(--text);
+      padding: 24px;
+    }
+    h1, h2, h3 { margin: 0; }
+    a { color: var(--accent); }
+    .grid {
+      display: grid;
+      grid-template-columns: 2fr 1.5fr;
+      gap: 16px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 18px 40px rgba(0,0,0,0.25);
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    label {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+    select, textarea, input, button {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      font-size: 14px;
+    }
+    button {
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+    }
+    button.primary {
+      background: linear-gradient(90deg, #22d3ee, #3b82f6);
+      color: #0b1221;
+      font-weight: 700;
+    }
+    button:hover { transform: translateY(-1px); }
+    textarea {
+      width: 100%;
+      min-height: 90px;
+      resize: vertical;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .chips { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .chip {
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .chip.ok { color: #0b172a; background: var(--chip-ok); }
+    .chip.err { color: #0b1221; background: var(--chip-err); }
+    .chip.pending { color: #0b1221; background: var(--chip-pending); }
+    .stack { display: grid; gap: 12px; }
+    .render-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .render-box {
+      border: 1px dashed #334155;
+      border-radius: 12px;
+      min-height: 180px;
+      padding: 12px;
+      color: var(--muted);
+    }
+    .section-title { margin-bottom: 8px; color: var(--muted); font-size: 13px; letter-spacing: 0.4px; }
+    .history { display: grid; gap: 8px; }
+    .history-item {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 8px;
+    }
+    .history-item span { color: var(--muted); font-size: 13px; }
+    .llm-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .llm-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div>
+      <h1>Diagram Debugger</h1>
+      <div style="color: var(--muted);">LLM-assisted, version-aware Mermaid/PlantUML</div>
+    </div>
+    <div class="chips">
+      <button>Mode: Single ▾</button>
+      <button>Export Snapshot</button>
+      <button>Import Snapshot</button>
+    </div>
+  </div>
+
+  <div class="panel stack">
+    <div class="section-title">LLM Panel</div>
+    <div class="grid">
+      <div class="stack">
+        <div class="row">
+          <div>
+            <label>Intent</label><br />
+            <select>
+              <option>Generate</option>
+              <option>Refine</option>
+              <option>Convert</option>
+            </select>
+          </div>
+          <div>
+            <label>Diagram Type</label><br />
+            <select>
+              <option>Mermaid</option>
+              <option>PlantUML</option>
+            </select>
+          </div>
+          <div>
+            <label>Version A</label><br />
+            <select>
+              <option>10.6.0</option>
+              <option>9.4.3</option>
+              <option>8.4.8</option>
+            </select>
+          </div>
+          <div>
+            <label>Version B (compare)</label><br />
+            <select>
+              <option>—</option>
+              <option>1.2023.10</option>
+              <option>1.2022.7</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label>Prompt</label>
+          <textarea placeholder="Describe the diagram or ask for fixes..."></textarea>
+        </div>
+        <div>
+          <div class="row" style="justify-content: space-between;">
+            <label>Existing Text (Refine/Convert) — default: editor content</label>
+            <div class="row" style="gap: 4px;">
+              <input type="checkbox" id="use-editor" checked />
+              <label for="use-editor">Use editor text</label>
+            </div>
+          </div>
+          <textarea placeholder="@startuml ..."></textarea>
+        </div>
+        <div class="llm-footer">
+          <div class="llm-actions">
+            <button class="primary">Ask LLM</button>
+            <span class="chip pending">LLM: idle</span>
+          </div>
+          <div class="row" style="gap: 6px;">
+            <label>History</label>
+            <span class="chip">last 5</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stack">
+        <div class="history">
+          <div class="history-item">
+            <span>Generate: sequence diagram for login</span>
+            <button>Apply</button>
+          </div>
+          <div class="history-item">
+            <span>Refine: fix syntax for 9.4.3</span>
+            <button>Apply</button>
+          </div>
+          <div class="history-item">
+            <span>Convert: PlantUML -> Mermaid</span>
+            <button>Apply</button>
+          </div>
+          <div class="history-item">
+            <span>Generate: checkout flow</span>
+            <button>Apply</button>
+          </div>
+          <div class="history-item">
+            <span>Refine: strict lane order</span>
+            <button>Apply</button>
+          </div>
+        </div>
+        <div>
+          <label>LLM Output (preview)</label>
+          <textarea placeholder="```mermaid\nflowchart TD\n...\n```"></textarea>
+          <div class="llm-actions" style="margin-top: 8px;">
+            <button class="primary">Apply to Editor</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel stack">
+    <div class="section-title">Editor</div>
+    <textarea style="min-height: 140px;" placeholder="Diagram text here...">flowchart TD
+  A[Render] --> B[Compare]
+  B --> C[Snapshot]</textarea>
+    <div class="row" style="justify-content: flex-start;">
+      <button class="primary">Render A</button>
+      <button>Render B</button>
+    </div>
+  </div>
+
+  <div class="render-grid">
+    <div class="panel">
+      <div class="row" style="justify-content: space-between; margin-bottom: 8px;">
+        <div><strong>Panel A</strong> — Mermaid 10.6.0</div>
+        <div class="chip ok">OK</div>
+      </div>
+      <div class="render-box">[ SVG output or error box ]</div>
+    </div>
+    <div class="panel">
+      <div class="row" style="justify-content: space-between; margin-bottom: 8px;">
+        <div><strong>Panel B</strong> — Mermaid 9.4.3</div>
+        <div class="chip err">Error</div>
+      </div>
+      <div class="render-box">[ Error: parse/render/runtime ]</div>
+    </div>
+  </div>
+</body>
+</html>

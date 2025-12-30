@@ -8,6 +8,7 @@
 - Frontend: `cd frontend && npm install` then `npm run dev` for local UI, `npm run build` for production assets, `npm run lint` to enforce style.
 - Backend: `cd backend && npm install` (or set up virtualenv if Python) then `npm test`/`pnpm test` for service logic; `./render.sh --version 1.2023.10 --input sample.puml` to dry-run PlantUML rendering with resource limits.
 - Env: set `VITE_BACKEND_URL` for the frontend to point at the Fastify service (default `http://localhost:8787`).
+- LLM: configure DeepSeek endpoint/key via `VITE_LLM_ENDPOINT` and `VITE_LLM_API_KEY`; LLM calls are front-end only today.
 - End-to-end (once wired): `npm run e2e` from repo root to validate mermaid/plantuml flows against multiple versions.
 
 ## Coding Style & Naming Conventions

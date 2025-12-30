@@ -17,6 +17,7 @@ Version-aware renderer and comparator for Mermaid and PlantUML diagrams, with sn
 ## Prerequisites
 - Node.js 18+ (for frontend/backend).
 - Java runtime (for PlantUML rendering).
+- LLM (DeepSeek) endpoint/key via environment variables.
 
 ## Setup
 ```bash
@@ -30,6 +31,7 @@ PINO_PRETTY=true PINO_LOG_LEVEL=debug HOST=127.0.0.1 PORT=8787 node dist/server.
 cd frontend
 npm install
 VITE_BACKEND_URL=http://127.0.0.1:8787 npm run dev -- --host 127.0.0.1 --port 5173 --clearScreen false
+# Optional LLM (DeepSeek): export VITE_LLM_ENDPOINT and VITE_LLM_API_KEY before running dev
 ```
 
 ## Usage

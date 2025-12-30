@@ -16,6 +16,7 @@
 ## 环境需求
 - Node.js 18+（前后端）。
 - Java 运行时（PlantUML 渲染）。
+- LLM（DeepSeek）端点与密钥通过环境变量配置。
 
 ## 快速启动
 ```bash
@@ -29,6 +30,7 @@ PINO_PRETTY=true PINO_LOG_LEVEL=debug HOST=127.0.0.1 PORT=8787 node dist/server.
 cd frontend
 npm install
 VITE_BACKEND_URL=http://127.0.0.1:8787 npm run dev -- --host 127.0.0.1 --port 5173 --clearScreen false
+# 可选：启动前设置 LLM 环境变量 VITE_LLM_ENDPOINT / VITE_LLM_API_KEY
 ```
 
 ## 使用
