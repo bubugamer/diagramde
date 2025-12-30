@@ -3,6 +3,11 @@ import { buildSystemPrompt } from './systemPrompt'
 
 const endpoint = (import.meta.env.VITE_LLM_ENDPOINT as string | undefined) || ''
 const apiKey = (import.meta.env.VITE_LLM_API_KEY as string | undefined) || ''
+const model = (import.meta.env.VITE_LLM_MODEL as string | undefined) || 'deepseek-chat'
+const temperature =
+  import.meta.env.VITE_LLM_TEMPERATURE !== undefined
+    ? Number(import.meta.env.VITE_LLM_TEMPERATURE)
+    : 0.2
 
 export async function callLlm(request: LlmRequest): Promise<LlmResponse> {
   if (!endpoint) {
@@ -10,11 +15,12 @@ export async function callLlm(request: LlmRequest): Promise<LlmResponse> {
   }
   const system = buildSystemPrompt(request.diagramType, request.versions)
   const body = {
-    model: 'deepseek-chat',
+    model,
     messages: [
       { role: 'system', content: system },
       { role: 'user', content: buildUserContent(request) },
     ],
+    temperature,
     stream: false,
   }
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
