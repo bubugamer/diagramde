@@ -329,6 +329,9 @@ function applySnapshot(snapshot: Snapshot) {
   if (snapshot.targets[1]) {
     rightVersion.value = snapshot.targets[1].version
     mode.value = 'compare'
+  } else {
+    mode.value = 'single'
+    Object.assign(right, { status: 'idle', svg: undefined, error: undefined })
   }
   if (snapshot.llm) {
     llmPrompt.value = snapshot.llm.prompt
@@ -349,6 +352,10 @@ watch(
 </script>
 
 <style scoped>
+:global(*, *::before, *::after) {
+  box-sizing: border-box;
+}
+
 .page {
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   color: #e5e7eb;
@@ -415,13 +422,16 @@ a {
 
 .grid {
   display: grid;
-  grid-template-columns: 2fr 1.5fr;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.3fr);
   gap: 12px;
+  align-items: start;
+  width: 100%;
 }
 
 .stack {
   display: grid;
   gap: 12px;
+  min-width: 0;
 }
 
 .row {
@@ -474,6 +484,7 @@ textarea {
   width: 100%;
   min-height: 90px;
   resize: vertical;
+  max-width: 100%;
 }
 
 .editor-area {
@@ -504,6 +515,7 @@ textarea {
 .history {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .history-item {
@@ -531,6 +543,15 @@ textarea {
 
 .panels.compare {
   grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 1200px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .panels.compare {
+    grid-template-columns: 1fr;
+  }
 }
 
 .render {

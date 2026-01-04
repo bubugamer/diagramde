@@ -13,6 +13,20 @@ export async function loadMermaid(version: string): Promise<any> {
 export async function renderMermaid(diagramId: string, source: string, version: string) {
   const mermaid: any = await loadMermaid(version)
   mermaid.initialize({ startOnLoad: false })
-  const { svg } = await mermaid.render(diagramId, source)
-  return svg as string
+  const maybePromise = mermaid.render(diagramId, source)
+
+  // Mermaid >=10 returns a Promise<{ svg }>
+  if (maybePromise && typeof maybePromise.then === 'function') {
+    const { svg } = await maybePromise
+    return svg as string
+  }
+
+  // Mermaid 8.x uses callback signature
+  return await new Promise<string>((resolve, reject) => {
+    try {
+      mermaid.render(diagramId, source, (svg: string) => resolve(svg))
+    } catch (err) {
+      reject(err)
+    }
+  })
 }

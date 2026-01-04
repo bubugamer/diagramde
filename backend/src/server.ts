@@ -3,6 +3,8 @@ import cors from '@fastify/cors'
 import { z } from 'zod'
 import { renderPlantUml } from './plantuml.js'
 import type { RenderResponse } from './types.js'
+import { callLlm } from './llm.js'
+import type { LlmRequestBody } from './types.js'
 
 const app = Fastify({ logger: true })
 app.register(cors, { origin: '*' })
@@ -31,6 +33,28 @@ app.post('/render/plantuml', async (req, reply) => {
     format: body.options?.format ?? 'svg',
   })
 
+  if (result.error) {
+    reply.code(500)
+  }
+  return result
+})
+
+const LlmSchema = z.object({
+  prompt: z.string(),
+  intent: z.enum(['generate', 'refine', 'convert']),
+  diagramType: z.enum(['mermaid', 'plantuml']),
+  versions: z.array(z.string()).min(1),
+  existingText: z.string().optional(),
+})
+
+app.post('/llm/chat', async (req, reply) => {
+  const parse = LlmSchema.safeParse(req.body)
+  if (!parse.success) {
+    reply.code(400)
+    return { generatedText: null, error: parse.error.message }
+  }
+  const body: LlmRequestBody = parse.data
+  const result = await callLlm(body, (msg) => app.log.info(msg))
   if (result.error) {
     reply.code(500)
   }
