@@ -1,6 +1,11 @@
 import { config as loadEnv } from 'dotenv'
-loadEnv()
-loadEnv({ path: '.env.local', override: true })
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+// Load env from backend root, regardless of cwd
+loadEnv({ path: path.join(__dirname, '../.env') })
+loadEnv({ path: path.join(__dirname, '../.env.local'), override: true })
 
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
