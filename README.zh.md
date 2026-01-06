@@ -24,13 +24,14 @@
 cd backend
 npm install
 npm run build
+export LLM_ENDPOINT=https://api.deepseek.com/v1/chat/completions
+export LLM_API_KEY=sk-xxxx
 PINO_PRETTY=true PINO_LOG_LEVEL=debug HOST=127.0.0.1 PORT=8787 node dist/server.js
 
 # 前端（另一个终端）
 cd frontend
 npm install
 VITE_BACKEND_URL=http://127.0.0.1:8787 npm run dev -- --host 127.0.0.1 --port 5173 --clearScreen false
-# 可选：启动前设置 LLM 环境变量 VITE_LLM_ENDPOINT / VITE_LLM_API_KEY
 ```
 
 ## 使用

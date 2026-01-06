@@ -25,13 +25,15 @@ Version-aware renderer and comparator for Mermaid and PlantUML diagrams, with sn
 cd backend
 npm install
 npm run build
+# set DeepSeek creds on backend; see backend/.env.example
+export LLM_ENDPOINT=https://api.deepseek.com/v1/chat/completions
+export LLM_API_KEY=sk-xxxx
 PINO_PRETTY=true PINO_LOG_LEVEL=debug HOST=127.0.0.1 PORT=8787 node dist/server.js
 
 # Frontend (in another shell)
 cd frontend
 npm install
 VITE_BACKEND_URL=http://127.0.0.1:8787 npm run dev -- --host 127.0.0.1 --port 5173 --clearScreen false
-# Optional LLM (DeepSeek): export VITE_LLM_ENDPOINT and VITE_LLM_API_KEY before running dev
 ```
 
 ## Usage
