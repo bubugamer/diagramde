@@ -1,3 +1,7 @@
+import { config as loadEnv } from 'dotenv'
+loadEnv()
+loadEnv({ path: '.env.local', override: true })
+
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import { z } from 'zod'
